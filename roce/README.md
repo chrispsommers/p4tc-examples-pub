@@ -1,6 +1,15 @@
-# routing
+# roce
+## Compile P4
 
-The *routing* program parses IPv4 packets. Any other packets are rejected(dropped).
+```
+./devenv.sh make generate
+```
+## Compile generated code
+```
+./devenv.sh make
+```
+## Description
+The *roce* program parses IPv4 packets. Any other packets are rejected(dropped).
 
 An invalid IPv4 packet with a ttl <= 1 is dropped; otherwise the packet's destination IP address is used to look up the table *fib_table*. On a table hit, the matched entry will utilized an action *set_nhid* programmed for the table entry. The *set_nhid* action sets a *nh_index* metadata value which is used downstream as a key to lookup the table *nh_table*. On a table miss the default miss action, *set_nhid*, which sets the *nh_index* metadata value to 0 is used.
 
@@ -22,12 +31,18 @@ Enter the container p4node and setup path for TC binary and the path to the intr
 ```
 sudo ip netns exec p4node /bin/bash
 TC="/usr/sbin/tc"
-cd /home/vagrant/p4tc-examples-pub/routing/generated
+cd /home/vagrant/p4tc-examples-pub/roce/generated
 export INTROSPECTION=.
 ```
 
 run TC monitor:
 `$TC mon`
+
+Alternatively, using convenince scripts:
+```
+./setup_ns.sh
+terminal1_setup.sh
+```
 
 ### Terminal 2
 
@@ -38,7 +53,11 @@ sudo ip netns exec p4node /bin/bash
 DEV=port0
 tcpdump -n -i $DEV -e
 ```
-
+Alternatively, using convenince scripts:
+```
+./setup_ns.sh
+terminal2_setup.sh
+```
 ### Terminal 3
 
 we will run commands to first load the prog and then do any runtime setup.
@@ -47,71 +66,84 @@ First enter the container and make sure you have the introspection path setup
 
 ```
 sudo ip netns exec p4node /bin/bash
-cd /home/vagrant/p4tc-examples-pub/routing/generated
+cd /home/vagrant/p4tc-examples-pub/roce/generated
 export INTROSPECTION=.
 TC="/usr/sbin/tc"
 ```
 
-Load the routing program
+Load the roce program
 
-`./routing.template`
+`./roce.template`
 
 Compile the runtime parser and control blocks programs if you have not already
 
-`make`
+`make -C ..`
 
 now instantiate the prog
 
 ```
-$TC filter add block 21 ingress protocol all prio 10 p4 pname routing \
-action bpf obj routing_parser.o section p4tc/parse \
-action bpf obj routing_control_blocks.o section p4tc/main
+$TC filter add block 21 ingress protocol all prio 10 p4 pname roce \
+action bpf obj roce_parser.o section p4tc/parse \
+action bpf obj roce_control_blocks.o section p4tc/main
 ```
-
+Alternatively, using convenince scripts:
+```
+./setup_ns.sh
+terminal3_setup.sh
+```
 ### Terminal 4 (on the VM side)
 
 Try sending a message of packets which generates ARPs that will be dropped by the parser(observe tcpdump on terminal 2)..
 
-`ping -I p4port0 10.0.1.2 -c 1`
+```
+ping -I p4port0 10.0.1.2 -c 1
+```
 
 Lets check some stats, below shows 3 packets dropped by the parser on <u>terminal 3</u>:
 
 ```
 $TC -s filter ls block 21 ingress
 filter protocol all pref 10 p4 chain 0
-filter protocol all pref 10 p4 chain 0 handle 0x1 pname routing
-	action order 1: bpf routing_parser.o:[p4tc/parse] id 92 name tc_parse_func tag 1bd66321c5ad54e4 jited default-action pipe
+filter protocol all pref 10 p4 chain 0 handle 0x1 pname roce
+	action order 1: bpf roce_parser.o:[p4tc/parse] id 92 name tc_parse_func tag 1bd66321c5ad54e4 jited default-action pipe
 	 index 1 ref 1 bind 1 installed 590 sec used 293 sec firstused 295 sec
 	Action statistics:
 	Sent 84 bytes 3 pkt (dropped 3, overlimits 0 requeues 0)
 	backlog 0b 0p requeues 0
 
-	action order 2: bpf routing_control_blocks.o:[p4tc/main] id 94 name tc_ingress_func tag 42e6e971daa41152 jited default-action pipe
+	action order 2: bpf roce_control_blocks.o:[p4tc/main] id 94 name tc_ingress_func tag 42e6e971daa41152 jited default-action pipe
 	 index 2 ref 1 bind 1 installed 590 sec used 590 sec
 	Action statistics:
 	Sent 0 bytes 0 pkt (dropped 0, overlimits 0 requeues 0)
 	backlog 0b 0p requeues 0
 ```
 
-Note that the second program *routing_control_blocks.o* is not hit at all because the parser dropped the non-IP arp packets.
+Note that the second program *roce_control_blocks.o* is not hit at all because the parser dropped the non-IP arp packets.
 
 Back to <u>terminal 4</u>, lets send a udp packet that will exercise the default entries
 
-`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/routing/generated/testpkt.yml`
+`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/roce/generated/testpkt.yml`
+
+Alternative, using Scapy:
+```
+sudo scapy
+p=Ether(src="02:03:04:05:06:01",dst="00:90:fb:65:d6:fe")/IP(src="11.0.0.1",dst="10.99.0.1")/UDP(sport=1235,dport=4321)
+sendp(p,iface='p4port0')
+```
 
 And back on <u>terminal 3</u>, check the stats
 
 ```
-root@p4tc:/home/vagrant/p4tc-examples-pub/routing/generated# $TC -s filter ls block 21 ingress
+root@p4tc:/home/vagrant/p4tc-examples-pub/roce/generated# $TC -s filter ls block 21 ingress
 filter protocol all pref 10 p4 chain 0
-filter protocol all pref 10 p4 chain 0 handle 0x1 pname routing
-	action order 1: bpf routing_parser.o:[p4tc/parse] id 92 name tc_parse_func tag 1bd66321c5ad54e4 jited default-action pipe
+filter protocol all pref 10 p4 chain 0 handle 0x1 pname roce
+	action order 1: bpf roce_parser.o:[p4tc/parse] id 92 name tc_parse_func tag 1bd66321c5ad54e4 jited default-action pipe
 	 index 1 ref 1 bind 1 installed 1082 sec used 16 sec firstused 787 sec
 	 Action statistics:
 	Sent 112 bytes 4 pkt (dropped 3, overlimits 0 requeues 0)
 	backlog 0b 0p requeues 0
 
-	action order 2: bpf routing_control_blocks.o:[p4tc/main] id 94 name tc_ingress_func tag 42e6e971daa41152 jited default-action pipe
+	action order 2: bpf roce_control_blocks.o:[p4tc/main] id 94 name tc_ingress_func tag 42e6e971daa41152 jited default-action pipe
 	 index 2 ref 1 bind 1 installed 1082 sec used 16 sec firstused 16 sec
 	 Action statistics:
 	Sent 28 bytes 1 pkt (dropped 1, overlimits 0 requeues 0)
@@ -122,19 +154,19 @@ As you can see above the packet made it through the parser but was dropped at th
 Ok, Lets demonstrate default routes by populating index 0 of *nh_table*
 
 ```
-$TC p4ctrl create routing/table/Main/nh_table nh_index 0 \
+$TC p4ctrl create roce/table/Main/nh_table nh_index 0 \
 action set_nh param dmac aa:bb:cc:dd:ee:ff param port port1
 ```
 
 If you watch TC monitor in terminal 1, you will see an event being generated for this entry:
 
 ```
-created pipeline:  routing(id 1)
+created pipeline:  roce(id 1)
  table: Main/nh_table(id 1)entry priority 64000[permissions -RUD-PS-R--X--]
     entry key
      nh_index id:1 size:32b type:bit32 exact fieldval  0
     entry actions:
-	action order 1: routing/Main/set_nh  index 1 ref 1 bind 1
+	action order 1: roce/Main/set_nh  index 1 ref 1 bind 1
 	 params:
 	  dmac type macaddr  value: aa:bb:cc:dd:ee:ff id 1
 	  port type dev  value: port1 id 2
@@ -145,7 +177,7 @@ created pipeline:  routing(id 1)
 ```
 
 Now repeat the test from earlier from the VM side:
-`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/routing/generated/testpkt.yml`
+`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/roce/generated/testpkt.yml`
 
 You should see this packet being forwarded to port1 on tcpdump.
 
@@ -158,16 +190,16 @@ listening on port1, link-type EN10MB (Ethernet), snapshot length 262144 bytes
 
 Our debug output on the filter now looks as follows:
 ```
-root@p4tc:/home/vagrant/p4tc-examples-pub/routing/generated# $TC -s filter ls block 21 ingress 
+root@p4tc:/home/vagrant/p4tc-examples-pub/roce/generated# $TC -s filter ls block 21 ingress 
 filter protocol all pref 10 p4 chain 0 
-filter protocol all pref 10 p4 chain 0 handle 0x1 pname routing 
-	action order 1: bpf routing_parser.o:[p4tc/parse] id 78 name tc_parse_func tag 4b0873fea2961183 jited default-action pipe
+filter protocol all pref 10 p4 chain 0 handle 0x1 pname roce 
+	action order 1: bpf roce_parser.o:[p4tc/parse] id 78 name tc_parse_func tag 4b0873fea2961183 jited default-action pipe
 	 index 1 ref 1 bind 1 installed 732 sec used 480 sec firstused 712 sec
  	Action statistics:
 	Sent 112 bytes 4 pkt (dropped 3, overlimits 0 requeues 0) 
 	backlog 0b 0p requeues 0
 
-	action order 2: bpf routing_control_blocks.o:[p4tc/main] id 80 name tc_ingress_func tag fe7824eaa74d0f2b jited default-action pipe
+	action order 2: bpf roce_control_blocks.o:[p4tc/main] id 80 name tc_ingress_func tag fe7824eaa74d0f2b jited default-action pipe
 	 index 2 ref 1 bind 1 installed 732 sec used 480 sec firstused 480 sec
  	Action statistics:
 	Sent 56 bytes 2 pkt (dropped 1, overlimits 0 requeues 0) 
@@ -182,37 +214,35 @@ next, on <u>terminal 3</u> lets create some entries (watch <u>terminal 1</u> for
 - on *nh_table* to match on index *1* with action *set_nh* action setting the nexthop destination MAC to 13:37:13:37:13:37 and then to send out on *port1*.
 
 ```
-$TC p4ctrl create routing/table/Main/nh_table nh_index 1 \
+$TC p4ctrl create roce/table/Main/nh_table nh_index 1 \
 action set_nh param dmac 13:37:13:37:13:37 param port port1
 ```
 
 - on *fib_table* to match on the prefix *10.0.0.0/8* with action *set_nhid* setting the nexthop id index to 1.
 
 ```
-$TC p4ctrl create routing/table/Main/fib_table  prefix 10.0.0.0/8 \
+$TC p4ctrl create roce/table/Main/fib_table  prefix 10.0.0.0/8 \
 action set_nhid param index 1
 ```
 
 On terminal 3 watch egressing port1 traffic:
 
-```
-tcpdump -n -i port1 -e
-```
+`tcpdump -n -i port1 -e`
 
 Now you can see the rewritten mac address when you generate traffic on <u>terminal 4</u> as follows:
 
-`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/routing/generated/testpkt.yml`
+`sudo sendpacket/sendpacket.py /home/vagrant/p4tc-examples-pub/roce/generated/testpkt.yml`
 
 Let's dump the *nh_table*
 
 ```
-root@p4tc:/home/vagrant/p4tc-examples-pub/routing/generated# $TC p4ctrl get routing/table/Main/nh_table
-pipeline:  routing(id 1)
+root@p4tc:/home/vagrant/p4tc-examples-pub/roce/generated# $TC p4ctrl get roce/table/Main/nh_table
+pipeline:  roce(id 1)
  table: Main/nh_table(id 1)entry priority 64000[permissions -RUD-PS-R--X--]
     entry key
      nh_index id:1 size:32b type:bit32 exact fieldval  1
     entry actions:
-	action order 1: routing/Main/set_nh  index 2 ref 1 bind 1
+	action order 1: roce/Main/set_nh  index 2 ref 1 bind 1
 	 params:
 	  dmac type macaddr  value: 13:37:13:37:13:37 id 1
 	  port type dev  value: port1 id 2
@@ -225,7 +255,7 @@ pipeline:  routing(id 1)
     entry key
      nh_index id:1 size:32b type:bit32 exact fieldval  0
     entry actions:
-	action order 1: routing/Main/set_nh  index 1 ref 1 bind 1
+	action order 1: roce/Main/set_nh  index 1 ref 1 bind 1
 	 params:
 	  dmac type macaddr  value: aa:bb:cc:dd:ee:ff id 1
 	  port type dev  value: port1 id 2
@@ -239,20 +269,20 @@ pipeline:  routing(id 1)
 
 Delete the entry we created
 
-`$TC p4ctrl delete routing/table/Main/fib_table prefix 10.0.0.0/8`
+`$TC p4ctrl delete roce/table/Main/fib_table prio 1 prefix 10.0.0.0/8`
 
 dump the table to check if any entry
 
-`$TC p4ctrl get routing/table/Main/nh_table`
+`$TC p4ctrl get roce/table/Main/fib_table`
 
 ## General help on commands
 
 Find out what tables exist:
 
-*$TC p4ctrl create  routing/table/Main help*
+*$TC p4ctrl create  roce/table/Main help*
 
 ```
-Tables for pipeline routing:
+Tables for pipeline roce:
 	  table name Main/fib_table
 	  table id 2
 
@@ -262,7 +292,7 @@ Tables for pipeline routing:
 
 Lets get more details on *fib_table*
 
-*$TC p4ctrl create routing/table/Main/fib_table help*
+*$TC p4ctrl create roce/table/Main/fib_table help*
 
 ```
 Key fields for table fib_table:
@@ -284,4 +314,4 @@ Actions for table fib_table:
 
 To cleanup
 ----------
-./routing.purge
+./roce.purge

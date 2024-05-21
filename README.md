@@ -16,3 +16,13 @@ Run the build-simple-p4 script to build the topology as illustrated below.
 # Examples
 
 cd to each example and read the approriate READMEs.
+
+# Make using docker
+From this level, you can call `devenv.sh` directly. You can also call from within the individual projects using the symlink to `devenv.sh`
+```
+./devenv.sh make -C <directory> <target [targets ...] [params]>
+```
+e.g.
+```
+./devenv.sh make -C roce/ generate
+```

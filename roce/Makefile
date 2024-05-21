@@ -4,7 +4,7 @@
 ## Argument for the CLANG compiler
 SHELL=/bin/bash
 CLANG ?= clang
-PROG ?= routing
+PROG ?= roce
 #we need to have a headers package instead of this..
 INCLUDES= -I../include
 # Optimization flags to save space
