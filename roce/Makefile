@@ -33,4 +33,4 @@ clean:
 	rm -f $(OBJS)
 
 realclean:
-	rm -f $(OBJS) $(SRCS) $(TMPL) $(PROG)_parser.h
+	rm -f $(OBJS) $(SRCS) $(TMPL) generated/$(PROG).h generated/$(PROG)_parser.h generated/*.bak

@@ -48,14 +48,34 @@ import zlib, socket
 class IB_BTH(Packet): 
    name = "Infiniband BTH" 
    fields_desc =  [ ByteEnumField("opcode", 0, {
+                     # Note this may be a subset of available codes, add others as needed
+                     # Reliable Connection (RC) codes 0-31
                      0: "RC_Send_First",
+                     1: "RC_Send_Middle",
+                     2: "RC_Send_Last",
+                     3: "RC_Send_Last_With_Immediate",
                      4:"RC_Send_Only",
+                     5:"RC_Send_Only_With_Immediate",
+                     6: "RC_RDMA_Write_First",
+                     7: "RC_RDMA_Write_Middle",
+                     8: "RC_RDMA_Write_Last",
+                     9: "RC_RDMA_Write_Last_With_Immediate",
                      10: "RC_RDMA_Write_Only",
+                     11: "RC_RDMA_Write_Only_With_Immediate",
                      12:"RC_RDMA_Read_Request",
+                     13:"RC_RDMA_Read_Response_First",
+                     14:"RC_RDMA_Read_Response_Middle",
+                     15:"RC_RDMA_Read_Response_Last",
                      16:"RC_RDMA_Read_Response_Only",
                      17:"RC_Acknowledge",
+                     18:"RC_Atomic_Acknowledge",
+                     # Unreliable Connection (UC) codes 32-63
+                     # Reliable Datagram (UD) codes 64-95
+                     # Unreliable Datagram (UD) codes 96-127
                      100:"UD_Send_Only",
-                     129:"RoCEv2_CNP"
+                     128:"RoCEv2_CNP"
+                     # Extended Reliable Connection (XRC) Codes 160-191
+                     # Manufacturer Specific Opcodes 192-255
                   }),
                     BitField("SE", 0, 1),       # Solicited Event
                     BitField("MigReq", 0, 1),   # Migration Request
@@ -66,7 +86,7 @@ class IB_BTH(Packet):
                     XBitField("dest_qp", 0, 24),  # Dest Queue pointer
                     BitField("ack_req", 0, 1),  # Acknowledge Request
                     BitField("Res", 0, 7),      # Reserved (does change iCRC))
-                    XBitField("pkt_seq", 0, 24),  # Packet Sequnce Number (PSN)
+                    XBitField("pkt_seq", 0, 24),  # Packet Sequence Number (PSN)
                      ] 
 
    def mysummary(self):

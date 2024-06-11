@@ -1,0 +1,75 @@
+#!/bin/bash -x
+
+set -e
+
+TC="tc"
+$TC p4template create pipeline/roce numtables 5
+
+$TC p4template create action/roce/Main/drop actid 1
+$TC p4template update action/roce/Main/drop state active
+
+$TC p4template create action/roce/Main/set_nh actid 2 \
+	param dmac type macaddr \
+	param port type dev
+$TC p4template update action/roce/Main/set_nh state active
+
+$TC p4template create action/roce/Main/set_nhid actid 3 \
+	param index type bit32
+$TC p4template update action/roce/Main/set_nhid state active
+
+$TC p4template create action/roce/Main/set_ecn actid 4 \
+	param codepoint type bit2
+$TC p4template update action/roce/Main/set_ecn state active
+
+$TC p4template create action/roce/Main/nop actid 5
+$TC p4template update action/roce/Main/nop state active
+
+$TC p4template create action/roce/Main/drop_conditional actid 6 \
+	param index type bit16
+$TC p4template update action/roce/Main/drop_conditional state active
+
+$TC p4template create table/roce/Main/nh_table \
+	tblid 1 \
+	type exact \
+	keysz 32 nummasks 8 tentries 2048 \
+	table_acts act name roce/Main/drop \
+	act name roce/Main/set_nh
+$TC p4template update table/roce/Main/nh_table default_miss_action action roce/Main/drop
+
+$TC p4template create table/roce/Main/fib_table \
+	tblid 2 \
+	type lpm \
+	keysz 32 nummasks 8 tentries 2048 \
+	table_acts act name roce/Main/set_nhid
+$TC p4template update table/roce/Main/fib_table default_miss_action action roce/Main/set_nhid param index 0
+
+$TC p4template create table/roce/Main/mark_ecn_table \
+	tblid 3 \
+	type lpm \
+	keysz 32 nummasks 8 tentries 2048 \
+	table_acts act name roce/Main/set_ecn \
+	act name roce/Main/nop
+$TC p4template update table/roce/Main/mark_ecn_table default_miss_action action roce/Main/nop
+
+$TC p4template create table/roce/Main/drop_n_table \
+	tblid 4 \
+	type lpm \
+	keysz 32 nummasks 8 tentries 2048 \
+	table_acts act name roce/Main/drop_conditional \
+	act name roce/Main/nop
+$TC p4template update table/roce/Main/drop_n_table default_miss_action action roce/Main/nop
+
+$TC p4template create table/roce/Main/roce_table \
+	tblid 5 \
+	type ternary \
+	keysz 64 nummasks 8 tentries 2048 \
+	table_acts act name roce/Main/drop_conditional \
+	act name roce/Main/nop
+$TC p4template update table/roce/Main/roce_table default_miss_action action roce/Main/nop
+
+$TC p4template create extern/root/Register extid 1 numinstances 1 tc_acl 0x19b6
+
+$TC p4template create extern_inst/roce/Register/Main.drop_counter instid 1 \
+control_path tc_key index type bit32 id 1 param a_value type bit32 id 2 \
+tc_numel 128
+$TC p4template update pipeline/roce state ready

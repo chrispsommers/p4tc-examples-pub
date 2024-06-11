@@ -1,7 +1,7 @@
 /* -*- P4_16 -*- */
 
-#include <core.p4>
-#include <tc/pna.p4>
+#include <core.p4>      // https://github.com/p4lang/p4c/blob/main/p4include/core.p4
+#include <tc/pna.p4>    // https://github.com/p4lang/p4c/blob/main/p4include/tc/pna.p4
 
 typedef bit<48> macaddr_t;
 
@@ -45,9 +45,28 @@ header udp_t
 // https://community.mellanox.com/s/article/rocev2-cnp-packet-format-example
 
 typedef bit<8> ib_bth_opcode_t;
-const ib_bth_opcode_t IB_BTH_OPCODE_CNP = 8w129;  // congestion-notification packet
-const ib_bth_opcode_t IB_BTH_OPCODE_RC_SEND_ONLY = 8w4;  // Reliable Connection Send Only
-const ib_bth_opcode_t IB_BTH_OPCODE_RC_ACK = 8w17;  // Reliable Connection Acknowledge
+const ib_bth_opcode_t IB_RC_SEND_FIRST           = 8w0;      // Reliable Connection Send First
+const ib_bth_opcode_t IB_RC_SEND_MIDDLE          = 8w1;      // Reliable Connection Send First
+const ib_bth_opcode_t IB_RC_SEND_LAST            = 8w2;      // Reliable Connection Send Last
+const ib_bth_opcode_t IB_RC_SEND_LAST_IMMED      = 8w3;      // Reliable Connection Send Last with immediate
+const ib_bth_opcode_t IB_RC_SEND_ONLY            = 8w4;      // Reliable Connection Send Only
+const ib_bth_opcode_t IB_RC_SEND_ONLY_IMMED      = 8w5;      // Reliable Connection Send Only with Immediate
+const ib_bth_opcode_t IB_RC_RDMA_WRITE_FIRST     = 8w6;      // Reliable Connection RDMA Write First
+const ib_bth_opcode_t IB_RC_RDMA_WRITE_MIDDLE    = 8w7;      // Reliable Connection RDMA Write Middle
+const ib_bth_opcode_t IB_RC_RDMA_WRITE_LAST      = 8w8;      // Reliable Connection RDMA Write Last
+const ib_bth_opcode_t IB_RC_RDMA_WRITE_LAST_IMMED= 8w9;      // Reliable Connection RDMA Write Last with Immediate
+const ib_bth_opcode_t IB_RC_WRITE_ONLY           = 8w10;     // Reliable Connection Write only
+const ib_bth_opcode_t IB_RC_WRITE_ONLY_IMMED     = 8w11;     // Reliable Connection Write only with Immediate
+const ib_bth_opcode_t IB_RC_READ_REQ             = 8w12;     // Reliable Connection Read Request
+const ib_bth_opcode_t IB_RC_READ_RESP_FIRST      = 8w13;     // Reliable Connection Read Response First
+const ib_bth_opcode_t IB_RC_READ_RESP_MIDDLE     = 8w14;     // Reliable Connection Read Response Middle
+const ib_bth_opcode_t IB_RC_READ_RESP_LAST       = 8w15;     // Reliable Connection Read Response Last
+const ib_bth_opcode_t IB_RC_READ_RESP_ONLY       = 8w16;     // Reliable Connection Read Response Only
+const ib_bth_opcode_t IB_RC_ACK                  = 8w17;     // Reliable Connection Acknowledge
+const ib_bth_opcode_t IB_RC_ATOMIC_ACK           = 8w18;     // Reliable Connection Atomic Acknowledge
+
+const ib_bth_opcode_t IB_UD_SEND_ONLY            = 8w100;    // Unreliable Datagram Send only
+const ib_bth_opcode_t IB_CNP                     = 8w128;    // congestion-notification packet
 
 // 54 bytes incl eth-ip-udp
 // Infiniband Base Transport Header. References:
@@ -138,9 +157,9 @@ parser Parser(
     @name(".parse_rocev2") state parse_rocev2 {
         pkt.extract(hdr.ib_bth);
         transition select(hdr.ib_bth.opcode) {
-            IB_BTH_OPCODE_CNP: parse_ib_cnp;  // congestion notification
-            IB_BTH_OPCODE_RC_SEND_ONLY: parse_ib_rc_send_only;  // reliable connection connection
-            IB_BTH_OPCODE_RC_ACK: parse_ib_aeth;  
+            IB_CNP: parse_ib_cnp;  // congestion notification
+            IB_RC_SEND_ONLY: parse_ib_rc_send_only;  // reliable connection connection
+            IB_RC_ACK: parse_ib_aeth;  
             default: accept;
         }
     }

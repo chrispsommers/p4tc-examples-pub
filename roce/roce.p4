@@ -27,6 +27,11 @@ control Main(
 {
    bit<32> nh_index;
 
+#define USE_REGISTER 1
+#ifdef USE_REGISTER
+   Register<bit<32>, bit<16>>(128,0) drop_counter;
+#endif // USE_REGISTER
+
    action drop() {
       drop_packet();
    }
@@ -62,10 +67,72 @@ control Main(
       default_action = set_nhid(0);
    }
 
+
+   action set_ecn(bit<2> codepoint) {
+      hdr.ip.diffserv = hdr.ip.diffserv | (bit<8>)codepoint;
+   }
+
+   action nop() {
+
+   }
+
+   table mark_ecn_table {
+      key = {
+         hdr.ip.dstAddr : lpm @tc_type("ipv4") @name("prefix");
+      }
+      actions = {
+         set_ecn();
+         nop();
+      }
+      default_action = nop();
+   }
+
+#ifdef USE_REGISTER
+   action drop_conditional(bit<16>index) {
+      bit<32> drop_count;
+      drop_count = drop_counter.read(index);
+      if (drop_count >0) {
+         drop_count = drop_count-1;
+         drop_counter.write(index,drop_count);
+         drop();
+      }
+   }
+
+   table drop_n_table {
+      key = {
+         hdr.ip.dstAddr : lpm @tc_type("ipv4") @name("prefix");
+      }
+      actions = {
+         drop_conditional();
+         nop();
+      }
+      default_action = nop();
+   }
+
+   table roce_table {
+      key = {
+         hdr.ib_bth.opcode : ternary;
+         hdr.ib_bth.dest_qp : ternary;
+         hdr.ip.dstAddr : lpm @tc_type("ipv4") @name("prefix");
+         
+      }
+      actions = {
+         drop_conditional();
+         nop();
+      }
+      default_action = nop();
+   }
+#endif // USE_REGISTER
+
    apply {
       if (hdr.ip.isValid() && hdr.ip.ttl > 1) {
             fib_table.apply();
             nh_table.apply();
+            mark_ecn_table.apply();
+#ifdef USE_REGISTER
+            drop_n_table.apply();
+            roce_table.apply();
+#endif // USE_REGISTER
       } else {
            drop_packet();
       }

@@ -31,17 +31,17 @@ Enter the container p4node and setup path for TC binary and the path to the intr
 ```
 sudo ip netns exec p4node /bin/bash
 TC="/usr/sbin/tc"
-cd /home/vagrant/p4tc-examples-pub/roce/generated
-export INTROSPECTION=.
+cd /home/vagrant/p4tc-examples-pub/roce/test
+export INTROSPECTION=../generated
 ```
 
 run TC monitor:
 `$TC mon`
 
-Alternatively, using convenince scripts:
+Alternatively, using convenience scripts:
 ```
 ./setup_ns.sh
-terminal1_setup.sh
+./tc_mon.sh
 ```
 
 ### Terminal 2
@@ -49,16 +49,31 @@ terminal1_setup.sh
 First enter the container and then start tcpdump.
 
 ```
+cd /home/vagrant/p4tc-examples-pub/roce/test
 sudo ip netns exec p4node /bin/bash
-DEV=port0
-tcpdump -n -i $DEV -e
+tcpdump -nei port0
 ```
 Alternatively, using convenince scripts:
 ```
 ./setup_ns.sh
-terminal2_setup.sh
+./tcpdump_port0.sh
 ```
+
 ### Terminal 3
+
+First enter the container and then start tcpdump.
+
+```
+cd /home/vagrant/p4tc-examples-pub/roce/test
+sudo ip netns exec p4node /bin/bash
+tcpdump -nei port1
+```
+Alternatively, using convenince scripts:
+```
+./setup_ns.sh
+./tcpdump_port1.sh
+```
+### Terminal 4
 
 we will run commands to first load the prog and then do any runtime setup.
 
@@ -79,7 +94,7 @@ Compile the runtime parser and control blocks programs if you have not already
 
 `make -C ..`
 
-now instantiate the prog
+Now instantiate the prog
 
 ```
 $TC filter add block 21 ingress protocol all prio 10 p4 pname roce \
@@ -89,9 +104,9 @@ action bpf obj roce_control_blocks.o section p4tc/main
 Alternatively, using convenince scripts:
 ```
 ./setup_ns.sh
-terminal3_setup.sh
+./setup_pipeline.sh
 ```
-### Terminal 4 (on the VM side)
+### Terminal 5 (on the VM side)
 
 Try sending a message of packets which generates ARPs that will be dropped by the parser(observe tcpdump on terminal 2)..
 
@@ -276,7 +291,7 @@ dump the table to check if any entry
 `$TC p4ctrl get roce/table/Main/fib_table`
 
 ## General help on commands
-
+### Tables
 Find out what tables exist:
 
 *$TC p4ctrl create  roce/table/Main help*
@@ -311,7 +326,88 @@ Actions for table fib_table:
 	    param type bit32
 
 ```
+### Registers
+List register instances:
+```
+$TC p4ctrl create roce/extern/Register help
 
-To cleanup
+Instances for extern Register:
+	  extern instance name Main.drop_counter
+	  extern instance id 1
+	  Params for Main.drop_counter:
+	    param name index
+	    param id 1
+	    param type bit32
+
+	    param name a_value
+	    param id 2
+	    param type bit32
+
+```
+Show all register values:
+```
+# $TC p4ctrl get roce/extern/Register/Main.drop_counter
+total exts 0
+
+	extern order 0:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 1
+	  Params:
+
+	  a_value  id 2 type bit32 value: 0
+
+	extern order 1:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 2
+	  Params:
+
+	  a_value  id 2 type bit32 value: 0
+
+	extern order 2:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 3
+	  Params:
+
+	  a_value  id 2 type bit32 value: 0
+	....
+	extern order 15:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 128
+	  Params:
+
+	  a_value  id 2 type bit32 value: 0
+	
+```
+Show register value at specifiedindex:
+```
+$TC p4ctrl get roce/extern/Register/Main.drop_counter tc_key index 1
+total exts 0
+
+	extern order 1:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 1
+	  Params:
+
+	  a_value  id 2 type bit32 value: 0
+```
+Set one register value, echo back:
+```
+$TC -echo p4ctrl update roce/extern/Register/Main.drop_counter tc_key index 1 param a_value 3
+total exts 0
+
+	extern order 1:
+	  Extern kind Register
+	  Extern instance Main.drop_counter
+	  Extern key 1
+	  Params:
+
+	  a_value  id 2 type bit32 value: 3
+```
+## Cleanup
 ----------
 ./roce.purge
