@@ -133,8 +133,8 @@ control Main(
             drop_n_table.apply();
             roce_table.apply();
 #endif // USE_REGISTER
-      } else {
-           drop_packet();
+      // } else {
+      //      drop_packet();
       }
    }
 }

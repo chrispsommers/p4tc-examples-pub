@@ -134,7 +134,7 @@ parser Parser(
         pkt.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
             ETHERTYPE_IPV4: parse_ipv4;
-            default: reject;
+            default: accept;
         }
     }
 

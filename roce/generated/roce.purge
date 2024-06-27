@@ -3,6 +3,7 @@
 export TC="/usr/sbin/tc"
 
 $TC filter del block 21 ingress protocol all prio 10 p4 pname roce
+#$TC filter del block 21 egress protocol all prio 10 p4 pname roce
 sleep 1
 $TC p4template del pipeline/roce pipeid 1
 sleep 1
